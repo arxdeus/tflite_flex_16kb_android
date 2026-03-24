@@ -16,15 +16,41 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 env:
   ANDROID_NDK_API_LEVEL: '21'
   ANDROID_NDK_VERSION: '28'
   HERMETIC_PYTHON_VERSION: '3.12'
 
 jobs:
+  resolve-ref:
+    name: Resolve TF commit
+    runs-on: ubuntu-22.04
+    outputs:
+      tf_sha: ${{ steps.sha.outputs.tf_sha }}
+      tf_short: ${{ steps.sha.outputs.tf_short }}
+    steps:
+      - name: Get TensorFlow HEAD SHA
+        id: sha
+        run: |
+          TF_SHA=$(git ls-remote https://github.com/tensorflow/tensorflow.git \
+            "${{ inputs.tf_ref || 'master' }}" | awk '{print $1}')
+
+          # If tf_ref is already a full SHA (not a branch/tag), ls-remote returns empty
+          if [ -z "$TF_SHA" ]; then
+            TF_SHA="${{ inputs.tf_ref }}"
+          fi
+
+          echo "tf_sha=$TF_SHA" >> "$GITHUB_OUTPUT"
+          echo "tf_short=${TF_SHA:0:12}" >> "$GITHUB_OUTPUT"
+          echo "Resolved TF ref: $TF_SHA"
+
   build:
     name: Flex Delegate (${{ matrix.arch }})
     runs-on: ubuntu-22.04
+    needs: resolve-ref
     timeout-minutes: 120
     strategy:
       fail-fast: false
@@ -55,7 +81,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: tensorflow/tensorflow
-          ref: ${{ inputs.tf_ref || 'master' }}
+          ref: ${{ needs.resolve-ref.outputs.tf_sha }}
           path: tensorflow
 
       - name: Set up Android NDK r28
@@ -103,33 +129,63 @@ jobs:
             --repo_env=HERMETIC_PYTHON_VERSION=${{ env.HERMETIC_PYTHON_VERSION }} \
             //tensorflow/lite/delegates/flex:tensorflowlite_flex
 
+      - name: Rename artifact
+        run: |
+          mkdir -p output
+          cp tensorflow/bazel-out/${{ matrix.arch }}-opt/bin/tensorflow/lite/delegates/flex/libtensorflowlite_flex.so \
+             output/libtensorflowlite_flex-${{ matrix.arch }}.so
+          ls -lh output/
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: libtensorflowlite_flex-${{ matrix.arch }}
-          path: tensorflow/bazel-out/${{ matrix.arch }}-opt/bin/tensorflow/lite/delegates/flex/libtensorflowlite_flex.so
+          path: output/libtensorflowlite_flex-${{ matrix.arch }}.so
           retention-days: 30
 
-  package:
-    name: Package jniLibs
+  release:
+    name: Create release
     runs-on: ubuntu-22.04
-    needs: build
+    needs: [resolve-ref, build]
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: libs
+          path: artifacts
 
-      - name: Assemble jniLibs
-        run: |
-          mkdir -p jniLibs/arm64-v8a jniLibs/armeabi-v7a
-          cp libs/libtensorflowlite_flex-arm64-v8a/libtensorflowlite_flex.so   jniLibs/arm64-v8a/
-          cp libs/libtensorflowlite_flex-armeabi-v7a/libtensorflowlite_flex.so jniLibs/armeabi-v7a/
-          find jniLibs -type f -exec ls -lh {} \;
+      - name: List artifacts
+        run: find artifacts -type f -exec ls -lh {} \;
 
-      - name: Upload jniLibs bundle
-        uses: actions/upload-artifact@v4
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: tflite-flex-delegate-android-jniLibs
-          path: jniLibs/
-          retention-days: 90
+          tag_name: tf-${{ needs.resolve-ref.outputs.tf_short }}
+          name: "TF Flex Delegate — tf@${{ needs.resolve-ref.outputs.tf_short }}"
+          body: |
+            TensorFlow Lite Flex Delegate for Android with 16KB page size support.
+
+            **TensorFlow commit:** [`${{ needs.resolve-ref.outputs.tf_short }}`](https://github.com/tensorflow/tensorflow/commit/${{ needs.resolve-ref.outputs.tf_sha }})
+
+            ## Files
+
+            | File | ABI |
+            |------|-----|
+            | `libtensorflowlite_flex-arm64-v8a.so` | 64-bit ARM |
+            | `libtensorflowlite_flex-armeabi-v7a.so` | 32-bit ARM |
+
+            ## Usage
+
+            Download both `.so` files and place them in your Android project:
+
+            ```
+            android/app/src/main/jniLibs/
+            ├── arm64-v8a/libtensorflowlite_flex.so      ← rename, drop the ABI suffix
+            └── armeabi-v7a/libtensorflowlite_flex.so
+            ```
+
+            See [README](https://github.com/${{ github.repository }}#replacing-so-in-a-project-using-flutter_litert_flex) for full integration instructions.
+          files: |
+            artifacts/libtensorflowlite_flex-arm64-v8a/libtensorflowlite_flex-arm64-v8a.so
+            artifacts/libtensorflowlite_flex-armeabi-v7a/libtensorflowlite_flex-armeabi-v7a.so
+          fail_on_unmatched_files: true
+          make_latest: true

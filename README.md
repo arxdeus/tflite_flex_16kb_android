@@ -1,14 +1,15 @@
 # TFLite Flex Delegate for Android (16KB Page Size)
 
-CI repository for building `libtensorflowlite_flex.so` with 16KB page size support for Android.
+CI repository for building `libtensorflowlite_flex_jni.so` with 16KB page size support for Android.
 
 ## Why
 
 Starting with Android 15, arm64 devices may use 16KB page size instead of 4KB.
 Google Play [requires](https://developer.android.com/guide/practices/page-sizes) 16KB compatibility for new apps.
 
-Pre-built `.so` files from TensorFlow do not support 16KB page alignment.
-This repository builds the flex delegate with the correct linker flags:
+The pre-built `libtensorflowlite_flex_jni.so` shipped in the Maven artifact
+`org.tensorflow:tensorflow-lite-select-tf-ops` does **not** support 16KB page alignment.
+This repository builds the JNI library from source with the correct linker flags:
 - `-Wl,-z,max-page-size=16384`
 - `-Wl,-z,common-page-size=16384`
 
@@ -29,15 +30,15 @@ You can specify a TensorFlow git ref (branch, tag, or SHA). Defaults to `master`
 
 ## Artifacts & Releases
 
-Each build creates a **GitHub Release** tagged `tf-<commit-hash>` with two `.so` files attached:
-- `libtensorflowlite_flex-arm64-v8a.so`
-- `libtensorflowlite_flex-armeabi-v7a.so`
+Each build creates a **GitHub Release** tagged `tf-<commit-hash>` with two files attached:
+- `libtensorflowlite_flex_jni.so-arm64-v8a`
+- `libtensorflowlite_flex_jni.so-armeabi-v7a`
 
 ## Replacing `.so` in a project using `flutter_litert_flex`
 
 The [`flutter_litert_flex`](https://github.com/hugocornellier/flutter_litert_flex) package
 pulls in `org.tensorflow:tensorflow-lite-select-tf-ops` via Maven, which bundles its own
-`libtensorflowlite_flex.so` **without** 16KB page alignment.
+`libtensorflowlite_flex_jni.so` **without** 16KB page alignment.
 
 There are two ways to replace it with our 16KB-aligned build:
 
@@ -64,7 +65,7 @@ val downloadFlexDelegate by tasks.registering {
 
     onlyIf {
         flexDelegateAbis.any { abi ->
-            !File(cacheDir, "$abi/libtensorflowlite_flex.so").exists()
+            !File(cacheDir, "$abi/libtensorflowlite_flex_jni.so").exists()
         }
     }
 
@@ -76,9 +77,9 @@ val downloadFlexDelegate by tasks.registering {
         }
 
         flexDelegateAbis.forEach { abi ->
-            val target = File(cacheDir, "$abi/libtensorflowlite_flex.so")
+            val target = File(cacheDir, "$abi/libtensorflowlite_flex_jni.so")
             if (!target.exists()) {
-                val url = "$baseUrl/libtensorflowlite_flex-$abi.so"
+                val url = "$baseUrl/libtensorflowlite_flex_jni.so-$abi"
                 logger.lifecycle("⬇ Downloading flex delegate ($abi)...")
                 target.parentFile.mkdirs()
                 URI(url).toURL().openStream().use { input ->
@@ -105,7 +106,7 @@ android {
 
     packaging {
         jniLibs {
-            pickFirsts += flexDelegateAbis.map { "lib/$it/libtensorflowlite_flex.so" }
+            pickFirsts += flexDelegateAbis.map { "lib/$it/libtensorflowlite_flex_jni.so" }
         }
     }
 }
@@ -118,7 +119,7 @@ tasks.configureEach {
 ```
 
 **How it works:**
-- On first `flutter build apk`, Gradle downloads both `.so` files (~110 MB each) into `build/flex-delegate/`
+- On first `flutter build apk`, Gradle downloads both `.so` files into `build/flex-delegate/`
 - Subsequent builds reuse the cache (files survive until `flutter clean`)
 - `sourceSets.jniLibs.srcDir` adds the cache dir as a native library source
 - `pickFirsts` resolves the conflict with the Maven-bundled `.so`
@@ -132,15 +133,14 @@ To force re-download: `cd android && ./gradlew clean`
 
 #### Step 1 — Add the custom `.so` files
 
-Download the `.so` files from the [latest release](../../releases/latest) and place them:
+Download both files from the [latest release](../../releases/latest), rename them
+(drop the ABI suffix), and place into your **app**:
 
 ```
 your_app/android/app/src/main/jniLibs/
-├── arm64-v8a/libtensorflowlite_flex.so
-└── armeabi-v7a/libtensorflowlite_flex.so
+├── arm64-v8a/libtensorflowlite_flex_jni.so
+└── armeabi-v7a/libtensorflowlite_flex_jni.so
 ```
-
-> Remember to rename the files — drop the `-arm64-v8a` / `-armeabi-v7a` suffix.
 
 #### Step 2 — Configure Gradle
 
@@ -157,8 +157,8 @@ android {
     packaging {
         jniLibs {
             pickFirsts += listOf(
-                "lib/arm64-v8a/libtensorflowlite_flex.so",
-                "lib/armeabi-v7a/libtensorflowlite_flex.so",
+                "lib/arm64-v8a/libtensorflowlite_flex_jni.so",
+                "lib/armeabi-v7a/libtensorflowlite_flex_jni.so",
             )
         }
     }
@@ -177,8 +177,8 @@ android {
     }
 
     packagingOptions {
-        pickFirst 'lib/arm64-v8a/libtensorflowlite_flex.so'
-        pickFirst 'lib/armeabi-v7a/libtensorflowlite_flex.so'
+        pickFirst 'lib/arm64-v8a/libtensorflowlite_flex_jni.so'
+        pickFirst 'lib/armeabi-v7a/libtensorflowlite_flex_jni.so'
     }
 }
 ```
@@ -187,28 +187,28 @@ android {
 
 #### Step 3 — Add to `.gitignore` (optional)
 
-The `.so` files are ~110 MB each. You may want to gitignore them:
+The `.so` files are ~110 MB each:
 
 ```gitignore
-android/app/src/main/jniLibs/**/libtensorflowlite_flex.so
+android/app/src/main/jniLibs/**/libtensorflowlite_flex_jni.so
 ```
 
 ---
 
 ### Verifying the replacement
 
-Build the APK and confirm the correct `.so` is bundled:
+Build the APK and confirm 16KB alignment:
 
 ```bash
 flutter build apk
 
 # Check the .so inside the APK
-unzip -l build/app/outputs/flutter-apk/app-release.apk | grep libtensorflowlite_flex
+unzip -l build/app/outputs/flutter-apk/app-release.apk | grep libtensorflowlite_flex_jni
 
 # Verify 16KB alignment
 unzip -o build/app/outputs/flutter-apk/app-release.apk \
-  lib/arm64-v8a/libtensorflowlite_flex.so -d /tmp
-readelf -l /tmp/lib/arm64-v8a/libtensorflowlite_flex.so | grep -i align
+  lib/arm64-v8a/libtensorflowlite_flex_jni.so -d /tmp
+readelf -l /tmp/lib/arm64-v8a/libtensorflowlite_flex_jni.so | grep -i align
 ```
 
 The LOAD segment alignment should show `0x4000` (16384).
@@ -218,7 +218,7 @@ The LOAD segment alignment should show `0x4000` (16384).
 The `flutter_litert_flex` plugin declares a Maven dependency on
 `org.tensorflow:tensorflow-lite-select-tf-ops`, which provides:
 - **Java class** `org.tensorflow.lite.flex.FlexDelegate` — still needed, kept as-is
-- **Native library** `libtensorflowlite_flex.so` — replaced by our 16KB-aligned build
+- **Native library** `libtensorflowlite_flex_jni.so` — replaced by our 16KB-aligned build
 
 The `pickFirsts` directive resolves the duplicate: Gradle picks our copy
 and discards the one from the AAR.

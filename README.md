@@ -19,6 +19,7 @@ This repository builds the JNI library from source with the correct linker flags
 |-----|-------------|
 | `arm64-v8a` | 64-bit ARM (modern devices) |
 | `armeabi-v7a` | 32-bit ARM (legacy devices) |
+| `x86_64` | x86_64 (emulators, ChromeOS) |
 
 ## Running the Build
 
@@ -33,6 +34,7 @@ You can specify a TensorFlow git ref (branch, tag, or SHA). Defaults to `master`
 Each build creates a **GitHub Release** tagged `tf-<commit-hash>` with two files attached:
 - `libtensorflowlite_flex_jni.so-arm64-v8a`
 - `libtensorflowlite_flex_jni.so-armeabi-v7a`
+- `libtensorflowlite_flex_jni.so-x86_64`
 
 ## Replacing `.so` in a project using `flutter_litert_flex`
 
@@ -56,7 +58,7 @@ import java.net.URI
 // --- Flex Delegate 16KB config ---
 val flexDelegateRepo = "YOUR_USERNAME/flex_delegate_android_16kb"  // ← your repo
 val flexDelegateTag = "latest"  // or a specific tag like "tf-73ef2dec449a"
-val flexDelegateAbis = listOf("arm64-v8a", "armeabi-v7a")
+val flexDelegateAbis = listOf("arm64-v8a", "armeabi-v7a", "x86_64")
 val flexDelegateCacheDir = layout.buildDirectory.dir("flex-delegate")
 
 val downloadFlexDelegate by tasks.registering {
@@ -139,7 +141,8 @@ Download both files from the [latest release](../../releases/latest), rename the
 ```
 your_app/android/app/src/main/jniLibs/
 ├── arm64-v8a/libtensorflowlite_flex_jni.so
-└── armeabi-v7a/libtensorflowlite_flex_jni.so
+├── armeabi-v7a/libtensorflowlite_flex_jni.so
+└── x86_64/libtensorflowlite_flex_jni.so
 ```
 
 #### Step 2 — Configure Gradle
@@ -150,7 +153,7 @@ In `android/app/build.gradle.kts`:
 android {
     defaultConfig {
         ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
         }
     }
 
@@ -159,6 +162,7 @@ android {
             pickFirsts += listOf(
                 "lib/arm64-v8a/libtensorflowlite_flex_jni.so",
                 "lib/armeabi-v7a/libtensorflowlite_flex_jni.so",
+                "lib/x86_64/libtensorflowlite_flex_jni.so",
             )
         }
     }
@@ -172,13 +176,14 @@ android {
 android {
     defaultConfig {
         ndk {
-            abiFilters 'arm64-v8a', 'armeabi-v7a'
+            abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64'
         }
     }
 
     packagingOptions {
         pickFirst 'lib/arm64-v8a/libtensorflowlite_flex_jni.so'
         pickFirst 'lib/armeabi-v7a/libtensorflowlite_flex_jni.so'
+        pickFirst 'lib/x86_64/libtensorflowlite_flex_jni.so'
     }
 }
 ```

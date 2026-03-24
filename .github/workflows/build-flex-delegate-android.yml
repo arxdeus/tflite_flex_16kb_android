@@ -62,6 +62,8 @@ jobs:
             bazel_config: android_arm64
           - arch: armeabi-v7a
             bazel_config: android_arm
+          - arch: x86_64
+            bazel_config: android_x86_64
 
     steps:
       - name: Free disk space
@@ -174,20 +176,23 @@ jobs:
             |------|-----|
             | `libtensorflowlite_flex_jni.so-arm64-v8a` | 64-bit ARM |
             | `libtensorflowlite_flex_jni.so-armeabi-v7a` | 32-bit ARM |
+            | `libtensorflowlite_flex_jni.so-x86_64` | x86_64 (emulator) |
 
             ## Usage
 
-            Download both files, rename and place them in your Android project:
+            Download the files, rename (drop the ABI suffix) and place in your Android project:
 
             ```
             android/app/src/main/jniLibs/
             ├── arm64-v8a/libtensorflowlite_flex_jni.so
-            └── armeabi-v7a/libtensorflowlite_flex_jni.so
+            ├── armeabi-v7a/libtensorflowlite_flex_jni.so
+            └── x86_64/libtensorflowlite_flex_jni.so
             ```
 
             Or use automatic download via `build.gradle.kts` — see [README](https://github.com/${{ github.repository }}#option-a--automatic-download-via-buildgradlekts-recommended).
           files: |
             artifacts/libtensorflowlite_flex_jni.so-arm64-v8a/libtensorflowlite_flex_jni.so-arm64-v8a
             artifacts/libtensorflowlite_flex_jni.so-armeabi-v7a/libtensorflowlite_flex_jni.so-armeabi-v7a
+            artifacts/libtensorflowlite_flex_jni.so-x86_64/libtensorflowlite_flex_jni.so-x86_64
           fail_on_unmatched_files: true
           make_latest: true

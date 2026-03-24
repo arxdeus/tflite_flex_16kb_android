@@ -1,0 +1,53 @@
+Fix TFLite Flex Delegate Android build: duplicate symbols and missing deps
+
+The portable_tensorflow_lib_lite target unconditionally depended on
+onednn_env_vars, which pulls in //tensorflow/core:framework (desktop-only).
+On Android, framework_internal_impl gets linked via if_static(), causing
+duplicate symbols with portable_tensorflow_lib_lite (both compile the same
+source files like graph_def_util.cc, kernel_def_builder.cc, etc.).
+
+Fix:
+- Guard onednn_env_vars behind if_not_mobile() (it's Intel MKL-only, #ifdef INTEL_MKL)
+- Add @com_google_protobuf//:protobuf dep (was transitive via framework_internal_impl)
+- Add @xla//xla/tsl/concurrency:executor dep (was transitive via framework_internal_impl)
+
+diff --git a/tensorflow/core/BUILD b/tensorflow/core/BUILD
+index b65ac12765d..454a561bc74 100644
+--- a/tensorflow/core/BUILD
++++ b/tensorflow/core/BUILD
+@@ -78,6 +78,7 @@ load(
+     "if_libtpu",
+     "if_mobile",
+     "if_nccl",
++    "if_not_mobile",
+     "tf_cc_test",
+     "tf_cc_test_mkl",
+     "tf_cc_tests",
+@@ -1036,10 +1037,13 @@ cc_library(
+         "//tensorflow/core:mobile_additional_lib_deps",
+         "//tensorflow/core/platform:resource",
+         "//tensorflow/core/public:release_version",
+-        "//tensorflow/core/util:onednn_env_vars",
+         "//tensorflow/core/util:stats_calculator_portable",
++        "@com_google_protobuf//:protobuf",
++        "@xla//xla/tsl/concurrency:executor",
+         "@xla//xla/tsl/util:safe_reinterpret_cast",
+-    ] + tf_portable_proto_lib() + tf_portable_deps_no_runtime(),
++    ] + if_not_mobile([
++        "//tensorflow/core/util:onednn_env_vars",
++    ]) + tf_portable_proto_lib() + tf_portable_deps_no_runtime(),
+     alwayslink = 1,
+ )
+ 
+diff --git a/tensorflow/core/kernels/BUILD b/tensorflow/core/kernels/BUILD
+index fdfc9173272..4b6a92cbde9 100644
+--- a/tensorflow/core/kernels/BUILD
++++ b/tensorflow/core/kernels/BUILD
+@@ -7238,6 +7238,7 @@ cc_library(
+         "@fft2d",
+         "@gemmlowp",
+         "@icu//:common",
++        "@xla//xla/tsl/concurrency:executor",
+         "@xla//xla/tsl/framework/fixedpoint",
+     ],
+     alwayslink = 1,

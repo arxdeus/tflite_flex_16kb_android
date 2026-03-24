@@ -38,10 +38,6 @@ Each build creates a **GitHub Release** tagged `tf-<commit-hash>` with two files
 
 ## Replacing `.so` in a project using `flutter_litert_flex`
 
-The [`flutter_litert_flex`](https://github.com/hugocornellier/flutter_litert_flex) package
-pulls in `org.tensorflow:tensorflow-lite-select-tf-ops` via Maven, which bundles its own
-`libtensorflowlite_flex_jni.so` **without** 16KB page alignment.
-
 There are two ways to replace it with our 16KB-aligned build:
 
 ---
@@ -56,7 +52,7 @@ and cache them in the build directory.
 import java.net.URI
 
 // --- Flex Delegate 16KB config ---
-val flexDelegateRepo = "YOUR_USERNAME/flex_delegate_android_16kb"  // ← your repo
+val flexDelegateRepo = "arxdeus/tflite_flex_16kb_android"  // ← your repo
 val flexDelegateTag = "latest"  // or a specific tag like "tf-73ef2dec449a"
 val flexDelegateAbis = listOf("arm64-v8a", "armeabi-v7a", "x86_64")
 val flexDelegateCacheDir = layout.buildDirectory.dir("flex-delegate")
@@ -87,7 +83,7 @@ val downloadFlexDelegate by tasks.registering {
                 URI(url).toURL().openStream().use { input ->
                     target.outputStream().use { output -> input.copyTo(output) }
                 }
-                logger.lifecycle("  ✅ ${target.length() / 1_048_576} MB → $target")
+                logger.lifecycle("  ${target.length() / 1_048_576} MB → $target")
             }
         }
     }
@@ -253,13 +249,3 @@ duplicating symbols already present in `portable_tensorflow_lib_lite`
 | Build Tools | 36.1.0 |
 | Bazel | 7.7.0 (from TF `.bazelversion`) |
 | Python | 3.12 (hermetic) |
-
-## Repository Structure
-
-```
-├── .github/workflows/
-│   └── build-flex-delegate-android.yml   # GitHub Actions workflow
-├── patches/
-│   └── fix-android-flex-delegate-build.patch
-└── README.md
-```
